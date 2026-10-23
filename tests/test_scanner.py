@@ -55,6 +55,24 @@ def sync_users(users, db, openai):
     assert "Database N+1 Query Loop" in categories
     assert "Unbacked LLM Retry Loop" in categories
 
+def test_python_ast_async_for_and_chained_sdk(tmp_path):
+    code_file = tmp_path / "async_service.py"
+    code_file.write_text("""
+async def process_batch(items, db, client):
+    # Comprehension DB query
+    results = [db.execute(x) for x in items]
+    async for item in items:
+        # Chained SDK call in async for
+        resp = await client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": item}])
+""", encoding="utf-8")
+
+    violations = PythonASTCostAnalyzer.analyze(str(code_file), code_file.read_text(encoding="utf-8"))
+    categories = [v.category for v in violations]
+
+    assert "Database N+1 Query Loop" in categories
+    assert "Unbacked LLM Retry Loop" in categories
+
+
 def test_pr_cost_firewall_markdown_generation(tmp_path):
     code_file = tmp_path / "bad.py"
     code_file.write_text("""

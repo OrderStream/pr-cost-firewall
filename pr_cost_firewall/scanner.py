@@ -105,7 +105,32 @@ class PythonASTCostAnalyzer:
                 self.generic_visit(node)
                 self.in_loop -= 1
 
+            def visit_AsyncFor(self, node: ast.AsyncFor):
+                self.in_loop += 1
+                self.generic_visit(node)
+                self.in_loop -= 1
+
             def visit_While(self, node: ast.While):
+                self.in_loop += 1
+                self.generic_visit(node)
+                self.in_loop -= 1
+
+            def visit_ListComp(self, node: ast.ListComp):
+                self.in_loop += 1
+                self.generic_visit(node)
+                self.in_loop -= 1
+
+            def visit_SetComp(self, node: ast.SetComp):
+                self.in_loop += 1
+                self.generic_visit(node)
+                self.in_loop -= 1
+
+            def visit_DictComp(self, node: ast.DictComp):
+                self.in_loop += 1
+                self.generic_visit(node)
+                self.in_loop -= 1
+
+            def visit_GeneratorExp(self, node: ast.GeneratorExp):
                 self.in_loop += 1
                 self.generic_visit(node)
                 self.in_loop -= 1
@@ -131,23 +156,30 @@ class PythonASTCostAnalyzer:
                             remediation="Eager load relations using 'select_related()' / 'joinedload()' or batch with 'WHERE id IN (...) / any()'."
                         ))
 
+                    # Reconstruct full attribute call path (e.g. client.chat.completions.create)
+                    call_parts = []
+                    curr = node.func
+                    while isinstance(curr, ast.Attribute):
+                        call_parts.append(curr.attr)
+                        curr = curr.value
+                    if isinstance(curr, ast.Name):
+                        call_parts.append(curr.id)
+                    full_call = ".".join(reversed(call_parts))
+                    tokens = set(call_parts)
+
                     # Check LLM unbacked retry loops
+                    llm_roots = {"openai", "client", "anthropic", "genai", "model"}
                     llm_patterns = {"create", "generate_content", "chat", "complete", "messages"}
-                    if func_name in llm_patterns:
-                        # Check if caller looks like openai or anthropic or client
-                        caller = ""
-                        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
-                            caller = node.func.value.id
-                        if caller in {"openai", "client", "anthropic", "genai", "model"}:
-                            violations.append(CostViolation(
-                                category="Unbacked LLM Retry Loop",
-                                severity="CRITICAL",
-                                file_path=file_path,
-                                line_number=node.lineno,
-                                estimated_monthly_usd=220.0,
-                                description=f"Autonomous LLM API call '{caller}.{func_name}()' executed inside unbounded loop without exponential backoff or caching.",
-                                remediation="Wrap with tenacity/backoff retry decorator, implement Redis prompt cache, and set max_retries limit."
-                            ))
+                    if (tokens & llm_roots) and (tokens & llm_patterns):
+                        violations.append(CostViolation(
+                            category="Unbacked LLM Retry Loop",
+                            severity="CRITICAL",
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            estimated_monthly_usd=220.0,
+                            description=f"Autonomous LLM API call '{full_call}()' executed inside unbounded loop without exponential backoff or caching.",
+                            remediation="Wrap with tenacity/backoff retry decorator, implement Redis prompt cache, and set max_retries limit."
+                        ))
 
                 self.generic_visit(node)
 
