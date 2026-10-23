@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pr-cost-firewall"
+version = "1.0.0"
+description = "Pull Request cost regression scanner that analyzes Dockerfile bloat, unindexed DB query loops (N+1), and unbacked LLM retry loops, commenting on PRs with estimated AWS/cloud monthly cost increases."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "OrderStream", email = "orderstream@users.noreply.github.com" }]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.scripts]
+pr-cost-firewall = "pr_cost_firewall.cli:main"
